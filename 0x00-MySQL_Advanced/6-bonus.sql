@@ -10,7 +10,7 @@ BEGIN
   DECLARE new_name VARCHAR(255);
   DECLARE new_id INT DEFAULT 0;
 
-  SELCT name INTO new_name FROM projects
+  SELECT name INTO new_name FROM projects
   WHERE name = project_name;
 
   IF new_name IS NULL THEN
@@ -20,7 +20,7 @@ BEGIN
   SELECT id INTO new_id FROM projects
   WHERE name = project_name;
 
-  INSET INTO corrections(user_id, project_id, score)
+  INSERT INTO corrections(user_id, project_id, score)
   VALUES (user_id, new_id, score);
 END $$
 DELIMITER ;
