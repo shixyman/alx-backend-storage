@@ -9,4 +9,4 @@ BEGIN
 		SET NEW.valid_email = 0;
 	END IF;
 END;$$
-delimter ;
+delimiter ;
