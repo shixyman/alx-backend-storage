@@ -6,16 +6,22 @@ from typing import Callable, Union
 def call_history(method: Callable) -> Callable:
     @wraps(method)
     def wrapper(self, *args, **kwargs):
-        inputs_key = f"{method.__qualname__}:inputs"
-        outputs_key = f"{method.__qualname__}:outputs"
-
+        inputs_key = method.__qualname__ + ":inputs"
+        outputs_key = method.__qualname__ + ":outputs"
         self._redis.rpush(inputs_key, str(args))
         output = method(self, *args, **kwargs)
-        self._redis.rpush(outputs_key, str(output))
-
+        self._redis.rpush(outputs_key, output)
         return output
-
     return wrapper
+
+def replay(func: Callable):
+    inputs_key = func.__qualname__ + ":inputs"
+    outputs_key = func.__qualname__ + ":outputs"
+    inputs = [eval(arg) for arg in self._redis.lrange(inputs_key, 0, -1)]
+    outputs = self._redis.lrange(outputs_key, 0, -1)
+    print(f"{func.__qualname__} was called {len(inputs)} times:")
+    for inp, out in zip(inputs, outputs):
+        print(f"{func.__qualname__}(*{inp}) -> {out}")
 
 class Cache:
     def __init__(self):
@@ -41,3 +47,4 @@ class Cache:
 
     def get_int(self, key: str) -> Union[int, None]:
         return self.get(key, fn=int)
+
