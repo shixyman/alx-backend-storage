@@ -1,30 +1,34 @@
+#!/usr/bin/env python3
 import requests
-import redis
 import time
+from functools import wraps
+from typing import Dict
 
-# Redis connection
-redis_client = redis.Redis()
+cache: Dict[str, str] = {}
 
+def get_page(url: str) -> str:
+    if url in cache:
+        print(f"Retrieving from cache: {url}")
+        return cache[url]
+    else:
+        print(f"Retrieving from web: {url}")
+        response = requests.get(url)
+        result = response.text
+        cache[url] = result
+        return result
 
-def track_url_count(url):
-    # Increment the count for the given URL
-    redis_client.incr(f"count:{url}")
-
-
-def get_page(url):
-    # Check if the URL is cached
-    cached_page = redis_client.get(url)
-    if cached_page:
-        return cached_page.decode('utf-8')
-
-    # Fetch the page content using requests
-    response = requests.get(url)
-    page_content = response.text
-
-    # Cache the page content with an expiration time of 10 seconds
-    redis_client.setex(url, 10, page_content)
-
-    # Track the URL count
-    track_url_count(url)
-
-    return page_content
+def cache_with_expiration(expiration: int):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            url = args[0]
+            key = f"count:{url}"
+            if key in cache:
+                count, timestamp = cache[key]
+                if time.time() - timestamp > expiration:
+                    result = func(*args, **kwargs)
+                    cache[key] = (count+1, time.time())
+                    return result
+                else:
+                    cache[key] = (count+1, timestamp)
+                    return
