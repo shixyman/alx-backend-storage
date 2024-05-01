@@ -1,39 +1,40 @@
 #!/usr/bin/env python3
-"""
-web cache and tracker
-"""
+""" Redis Module """
+
 import requests
-import redis
+import time
 from functools import wraps
 
-store = redis.Redis()
+def cache(ttl=10):  # 10 seconds
+    cache_data = {}
 
+    def decorator(func):
+        def wrapper(url):
+            nonlocal cache_data
+            now = time.time()
+            if url in cache_data and now - cache_data[url][0] < ttl:
+                return cache_data[url][1]
+            result = func(url)
+            cache_data[url] = (now, result)
+            return result
+        return wrapper
+    return decorator
 
-def count_url_access(method):
-    """ Decorator counting how many times
-    a URL is accessed """
-    @wraps(method)
-    def wrapper(url):
-        cached_key = "cached:" + url
-        cached_data = store.get(cached_key)
-        if cached_data:
-            return cached_data.decode("utf-8")
-
-        count_key = "count:" + url
-        html = method(url)
-
-        store.incr(count_key)
-        store.set(cached_key, html)
-        store.expire(cached_key, 10)
-        return html
-    return wrapper
-
-
-@count_url_access
+@cache()
 def get_page(url: str) -> str:
-    """ Returns HTML content of a url """
-    res = requests.get(url)
-    return res.text
+    response = requests.get(url)
+    response.raise_for_status()
+    return response.text
+
+def count_access(url: str):
+    count_key = f"count:{url}"
+    if count_key not in count_access.cache:
+        count_access.cache[count_key] = 0
+    count_access.cache[count_key] += 1
+
+def get_page_with_count(url: str) -> str:
+    count_access(url)
+    return get_page(url)
 
 
 # Example usage:
