@@ -1,46 +1,41 @@
 #!/usr/bin/env python3
-""" Redis Module """
-
-import requests
+'''A module with tools for request caching and tracking.
+'''
 import redis
+import requests
 from functools import wraps
-
-redis_client = redis.Redis(host='localhost', port=6379, db=0)
-
-
-def count_url_accesses(func):
-    @wraps(func)
-    def wrapper(url):
-        count_key = f"count:{url}"
-        redis_client.incr(count_key)
-        return func(url)
-
-    return wrapper
+from typing import Callable
 
 
-def cache_with_expiration(expiration):
-    def decorator(func):
-        @wraps(func)
-        def wrapper(url):
-            cache_key = f"cache:{url}"
-            cached_content = redis_client.get(cache_key)
-            if cached_content:
-                return cached_content.decode('utf-8')
-            else:
-                response = func(url)
-                redis_client.setex(cache_key, expiration, response)
-                return response
-
-        return wrapper
-
-    return decorator
+redis_store = redis.Redis()
+'''The module-level Redis instance.
+'''
 
 
-@count_url_accesses
-@cache_with_expiration(expiration=10)
+def data_cacher(method: Callable) -> Callable:
+    '''Caches the output of fetched data.
+    '''
+    @wraps(method)
+    def invoker(url) -> str:
+        '''The wrapper function for caching the output.
+        '''
+        redis_store.incr(f'count:{url}')
+        result = redis_store.get(f'result:{url}')
+        if result:
+            return result.decode('utf-8')
+        result = method(url)
+        redis_store.set(f'count:{url}', 0)
+        redis_store.setex(f'result:{url}', 10, result)
+        return result
+    return invoker
+
+
+@data_cacher
 def get_page(url: str) -> str:
-    response = requests.get(url)
-    return response.text
+    '''Returns the content of a URL after caching the request's response,
+    and tracking the request.
+    '''
+    return requests.get(url).text
 
 
 # Example usage:
