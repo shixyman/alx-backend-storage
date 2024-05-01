@@ -43,7 +43,6 @@ def get_page(url: str) -> str:
     return response.text
 
 
-
 # Example usage:
 if __name__ == "__main__":
     """doc doc test"""
