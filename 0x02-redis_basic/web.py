@@ -1,32 +1,53 @@
-#!/usr/bin/env python3
-""" Redis Module """
-
-from functools import wraps
-import redis
 import requests
-from typing import Callable
+import redis
+import time
+from functools import wraps
 
-redis_ = redis.Redis()
+# Redis connection
+redis_client = redis.Redis(host='localhost', port=6379, db=0)
 
+def track_url_count(url):
+    """
+    Decorator function to track the count of a URL using Redis.
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            count_key = f"count:{url}"
+            redis_client.incr(count_key)
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
 
-def count_requests(method: Callable) -> Callable:
-    """ Decortator for counting """
-    @wraps(method)
-    def wrapper(url):
-        """ Wrapper for decorator """
-        redis_.incr(f"count:{url}")
-        cached_html = redis_.get(f"cached:{url}")
-        if cached_html:
-            return cached_html.decode('utf-8')
-        html = method(url)
-        redis_.setex(f"cached:{url}", 10, html)
-        return html
+def cache_result(expiration_time):
+    """
+    Decorator function to cache the result of a function using Redis.
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            cache_key = f"cache:{func.__name__}:{args}"
+            cached_result = redis_client.get(cache_key)
+            if cached_result:
+                return cached_result.decode('utf-8')
+            else:
+                result = func(*args, **kwargs)
+                redis_client.setex(cache_key, expiration_time, result)
+                return result
+        return wrapper
+    return decorator
 
-    return wrapper
+@track_url_count("http://slowwly.robertomurray.co.uk")
+@cache_result(expiration_time=10)
+def get_page(url):
+    response = requests.get(url)
+    return response.text
 
+# Test the get_page function
+url = "http://slowwly.robertomurray.co.uk"
+print(get_page(url))  # This will be slow for the first time
+print(get_page(url))  # This will be cached and return the result immediately
 
-@count_requests
-def get_page(url: str) -> str:
-    """ Obtain the HTML content of a  URL """
-    req = requests.get(url)
-    return req.text
+# Check the count of the URL
+count_key = f"count:{url}"
+print(f"URL accessed {redis_client.get(count_key).decode('utf-8')} times.")
