@@ -1,36 +1,42 @@
-#!/usr/bin/python3
-"""doc doc module"""
+#!/usr/bin/env python3
+""" Module for Implementing an expiring web cache and tracker """
 
-import requests
-import redis
 from functools import wraps
+import redis
+import requests
+from typing import Callable
+
+client = redis.Redis()
 
 
-# For example, the Redis server is running on localhost:6379
-redis_client = redis.Redis(host='localhost', port=6379, db=0)
+def count_requests(method: Callable) -> Callable:
+    """ Decortator to count how many request has been made"""
 
-
-def count_url_accesses(func):
-    """doc doc Decorator that counts how many times a URL has been accessed."""
-    @wraps(func)
+    @wraps(method)
     def wrapper(url):
-        # Increment the count each time a URL is accessed
-        count_key = f"count:{url}"
-        redis_client.incr(count_key)
-        return func(url)
+        """ Function wrapper """
+        client.incr(f"count:{url}")
+        cached_html = client.get(f"cached:{url}")
+        if cached_html:
+            return cached_html.decode('utf-8')
+
+        html = method(url)
+        client.setex(f"cached:{url}", 10, html)
+        return html
+
     return wrapper
 
 
-@count_url_accesses
+@count_requests
 def get_page(url: str) -> str:
-    """doc doc Fetches HTML content of URL with caching and access counting"""
-    cache_key = f"cache:{url}"
-    # Check if the cached version exists
-    cached_content = redis_client.get(cache_key)
-    if cached_content:
-        return cached_content.decode('utf-8')
+    """Gets the html content of a web page
+    """
+    req = requests.get(url)
+    return req.text
 
-    # If not cached, fetch the content and cache it with a 10-second expiration
-    response = requests.get(url)
-    redis_client.setex(cache_key, 10, response.text)
-    return response.text
+
+if __name__ == "__main__":
+    """doc doc test"""
+    url = 'http://slowwly.robertomurray.co.uk'
+    content = get_page(url)
+    print(content)  # This should print the fetched HTML content
