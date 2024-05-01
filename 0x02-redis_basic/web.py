@@ -55,3 +55,8 @@ def get_page(url: str) -> str:
         result = response.text
         cache[url] = result
         return result
+
+
+if __name__ == "__main__":
+
+    get_page('http://slowwly.robertomurray.co.uk')
