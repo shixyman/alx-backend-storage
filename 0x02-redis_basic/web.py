@@ -2,39 +2,45 @@
 """ Redis Module """
 
 import requests
-import time
+import redis
 from functools import wraps
 
-def cache(ttl=10):  # 10 seconds
-    cache_data = {}
+redis_client = redis.Redis(host='localhost', port=6379, db=0)
 
+
+def count_url_accesses(func):
+    @wraps(func)
+    def wrapper(url):
+        count_key = f"count:{url}"
+        redis_client.incr(count_key)
+        return func(url)
+
+    return wrapper
+
+
+def cache_with_expiration(expiration):
     def decorator(func):
+        @wraps(func)
         def wrapper(url):
-            nonlocal cache_data
-            now = time.time()
-            if url in cache_data and now - cache_data[url][0] < ttl:
-                return cache_data[url][1]
-            result = func(url)
-            cache_data[url] = (now, result)
-            return result
+            cache_key = f"cache:{url}"
+            cached_content = redis_client.get(cache_key)
+            if cached_content:
+                return cached_content.decode('utf-8')
+            else:
+                response = func(url)
+                redis_client.setex(cache_key, expiration, response)
+                return response
+
         return wrapper
+
     return decorator
 
-@cache()
+
+@count_url_accesses
+@cache_with_expiration(expiration=10)
 def get_page(url: str) -> str:
     response = requests.get(url)
-    response.raise_for_status()
     return response.text
-
-def count_access(url: str):
-    count_key = f"count:{url}"
-    if count_key not in count_access.cache:
-        count_access.cache[count_key] = 0
-    count_access.cache[count_key] += 1
-
-def get_page_with_count(url: str) -> str:
-    count_access(url)
-    return get_page(url)
 
 
 # Example usage:
