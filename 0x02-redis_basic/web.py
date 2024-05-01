@@ -1,38 +1,36 @@
+#!/usr/bin/env python3
+"""
+web cache and tracker
+"""
 import requests
 import redis
-import time
 from functools import wraps
 
-def cache_with_expiration(expires_in):
-    def decorator(func):
-        @wraps(func)
-        def wrapper(url):
-            redis_instance = redis.Redis()
-            cache_key = f"cache:{url}"
-            count_key = f"count:{url}"
+store = redis.Redis()
 
-            # Check if the result is already cached
-            cached_result = redis_instance.get(cache_key)
-            if cached_result:
-                print("Retrieving from cache...")
-                return cached_result.decode("utf-8")
 
-            # If not cached, fetch the page and cache the result
-            response = requests.get(url)
-            content = response.text
-            redis_instance.set(cache_key, content, ex=expires_in)
+def count_url_access(method):
+    """ Decorator counting how many times
+    a URL is accessed """
+    @wraps(method)
+    def wrapper(url):
+        cached_key = "cached:" + url
+        cached_data = store.get(cached_key)
+        if cached_data:
+            return cached_data.decode("utf-8")
 
-            # Increment the access count for the URL
-            redis_instance.incr(count_key)
+        count_key = "count:" + url
+        html = method(url)
 
-            return content
+        store.incr(count_key)
+        store.set(cached_key, html)
+        store.expire(cached_key, 10)
+        return html
+    return wrapper
 
-        return wrapper
 
-    return decorator
-
-@cache_with_expiration(expires_in=10)
-def get_page(url):
-    response = requests.get(url)
-    content = response.text
-    return content
+@count_url_access
+def get_page(url: str) -> str:
+    """ Returns HTML content of a url """
+    res = requests.get(url)
+    return res.text
