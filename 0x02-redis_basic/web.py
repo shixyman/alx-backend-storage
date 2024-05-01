@@ -10,7 +10,7 @@ redis_ = redis.Redis()
 
 
 def count_requests(method: Callable) -> Callable:
-    """ Decortator for counting """
+    """ Decorator for counting """
     @wraps(method)
     def wrapper(url):
         """ Wrapper for decorator """
@@ -27,7 +27,7 @@ def count_requests(method: Callable) -> Callable:
 
 @count_requests
 def get_page(url: str) -> str:
-    """ Obtain the HTML content of a  URL """
+    """ Obtain the HTML content of a URL """
     req = requests.get(url)
     return req.text
 
@@ -39,7 +39,3 @@ if __name__ == "__main__":
     content = get_page(url)
     print(content)  # This should print the fetched HTML content
 
-if __name__ == "__main__":
-    url = "http://slowwly.robertomurray.co.uk"
-    content = get_page(url)
-    print(content)
